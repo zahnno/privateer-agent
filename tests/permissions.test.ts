@@ -1,0 +1,75 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { decideAuto, isAllowlisted } from "../src/permissions/mode.ts";
+import { ModeGate, type AskOutcome } from "../src/permissions/uiGate.ts";
+import type { PermissionRequest } from "../src/permissions/gate.ts";
+import type { PermissionMode } from "../src/config/schema.ts";
+
+const edit: PermissionRequest = { tool: "edit", kind: "edit", title: "Edit file", detail: "a.ts" };
+const bash = (cmd: string): PermissionRequest => ({ tool: "bash", kind: "bash", title: "Run", detail: cmd });
+
+test("isAllowlisted matches command prefixes", () => {
+  const allow = ["git status", "ls"];
+  assert.equal(isAllowlisted("git status", allow), true);
+  assert.equal(isAllowlisted("git status --short", allow), true);
+  assert.equal(isAllowlisted("git push", allow), false);
+  assert.equal(isAllowlisted("lsof", allow), false); // not a prefix-with-space match
+});
+
+test("decideAuto follows the mode policy", () => {
+  assert.equal(decideAuto(edit, "bypass", []), "allow");
+  assert.equal(decideAuto(edit, "plan", []), "deny");
+  assert.equal(decideAuto(edit, "acceptEdits", []), "allow");
+  assert.equal(decideAuto(edit, "default", []), "ask");
+  assert.equal(decideAuto(bash("ls"), "acceptEdits", []), "ask"); // edits auto, bash still asks
+  assert.equal(decideAuto(bash("ls"), "default", ["ls"]), "allow"); // allowlisted
+});
+
+function makeGate(initialMode: PermissionMode, answer: AskOutcome) {
+  let mode = initialMode;
+  const allowlist: string[] = [];
+  let asks = 0;
+  const gate = new ModeGate({
+    getMode: () => mode,
+    setMode: (m) => (mode = m),
+    allowlist,
+    ask: async () => {
+      asks++;
+      return answer;
+    },
+  });
+  return { gate, allowlist, asks: () => asks, mode: () => mode };
+}
+
+test("gate auto-allows in bypass without asking", async () => {
+  const g = makeGate("bypass", "deny");
+  assert.equal(await g.gate.request(edit), "allow");
+  assert.equal(g.asks(), 0);
+});
+
+test("gate denies in plan without asking", async () => {
+  const g = makeGate("plan", "allow");
+  assert.equal(await g.gate.request(bash("rm -rf /")), "deny");
+  assert.equal(g.asks(), 0);
+});
+
+test("gate asks in default and honors deny", async () => {
+  const g = makeGate("default", "deny");
+  assert.equal(await g.gate.request(edit), "deny");
+  assert.equal(g.asks(), 1);
+});
+
+test("'always' on bash remembers the command", async () => {
+  const g = makeGate("default", "always");
+  assert.equal(await g.gate.request(bash("npm test")), "allow");
+  assert.deepEqual(g.allowlist, ["npm test"]);
+  // Second time it's allowlisted, so no further ask.
+  assert.equal(await g.gate.request(bash("npm test")), "allow");
+  assert.equal(g.asks(), 1);
+});
+
+test("'always' on edit switches to acceptEdits", async () => {
+  const g = makeGate("default", "always");
+  assert.equal(await g.gate.request(edit), "allow");
+  assert.equal(g.mode(), "acceptEdits");
+});

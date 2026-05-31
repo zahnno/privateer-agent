@@ -1,0 +1,33 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import React from "react";
+import { render } from "ink-testing-library";
+import { App } from "../src/components/App.tsx";
+import { Config } from "../src/config/schema.ts";
+
+// Smoke test: the App renders its full component tree (banner, status bar, input)
+// without crashing when a provider is configured. No network — session construction
+// is local. Verifies the Ink layout/props are wired correctly.
+test("App renders banner, status bar, and prompt", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "privateer-tui-"));
+  try {
+    const config = Config.parse({ providers: { anthropic: { apiKey: "x" } } });
+    const { lastFrame, unmount } = render(
+      React.createElement(App, { model: "anthropic:claude-opus-4-8", config, cwd }),
+    );
+    // Let effects (session build) flush.
+    await new Promise((r) => setTimeout(r, 50));
+    const frame = lastFrame() ?? "";
+    assert.match(frame, /PRIVATEER/);
+    assert.match(frame, /anthropic:claude-opus-4-8/);
+    assert.match(frame, /privateer/); // status bar chip
+    assert.match(frame, /default/); // permission mode in status bar
+    assert.match(frame, /type a prompt/); // input placeholder
+    unmount();
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

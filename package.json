@@ -1,0 +1,40 @@
+{
+  "name": "privateer",
+  "version": "0.0.1",
+  "description": "Privateer — a provider-agnostic terminal coding agent. Bring your own model (OpenRouter, Anthropic, OpenAI, Ollama).",
+  "type": "module",
+  "bin": {
+    "privateer": "./bin/privateer.mjs"
+  },
+  "scripts": {
+    "start": "tsx src/main.tsx",
+    "dev": "tsx watch src/main.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/openai": "^2.0.0",
+    "@openrouter/ai-sdk-provider": "^1.0.0",
+    "@types/picomatch": "^4.0.3",
+    "ai": "^5.0.0",
+    "commander": "^12.0.0",
+    "ink": "^5.0.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "ollama-ai-provider-v2": "^1.2.0",
+    "picomatch": "^4.0.4",
+    "react": "^18.3.1",
+    "zod": "^4.0.16"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

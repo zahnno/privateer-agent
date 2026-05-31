@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.log
+.privateer/
+.DS_Store
