@@ -1,6 +1,6 @@
 {
   "name": "privateer",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Privateer — a provider-agnostic terminal coding agent. Bring your own model (OpenRouter, Anthropic, OpenAI, Ollama).",
   "type": "module",
   "license": "MIT",
@@ -25,6 +25,13 @@
   "bin": {
     "privateer": "./bin/privateer.mjs"
   },
+  "files": [
+    "bin",
+    "src",
+    "brand",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "tsx src/main.tsx",
     "dev": "tsx watch src/main.tsx",
@@ -47,13 +54,13 @@
     "ollama-ai-provider-v2": "^1.2.0",
     "picomatch": "^4.0.4",
     "react": "^18.3.1",
+    "tsx": "^4.16.0",
     "zod": "^4.0.16"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "ink-testing-library": "^4.0.0",
-    "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   }
 }

@@ -37,11 +37,13 @@ export function App({
   config,
   cwd,
   resume,
+  onLogin,
 }: {
   model: string;
   config: Config;
   cwd: string;
   resume?: SessionData | null;
+  onLogin?: () => void;
 }) {
   const { exit } = useApp();
   const [committed, setCommitted] = useState<Entry[]>([]);
@@ -181,6 +183,9 @@ export function App({
         break;
       case "compact":
         void doCompact();
+        break;
+      case "onboarding":
+        onLogin?.();
         break;
       case "notice":
         append({ kind: "notice", text: res.text, tone: res.tone });

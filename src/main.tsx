@@ -1,11 +1,12 @@
 import React from "react";
 import { render } from "ink";
 import { Command } from "commander";
-import { App } from "./components/App.tsx";
+import { Root } from "./components/Root.tsx";
 import { NAME, VERSION, DESCRIPTION } from "./version.ts";
 import { loadConfig } from "./config/load.ts";
 import { createSession } from "./session.ts";
 import { loadLatest } from "./memory/store.ts";
+import { configuredProviders } from "./providers/resolve.ts";
 
 interface CliOptions {
   print?: boolean;
@@ -13,6 +14,7 @@ interface CliOptions {
   cwd?: string;
   dangerouslySkipPermissions?: boolean;
   continue?: boolean;
+  onboard?: boolean;
 }
 
 const DEFAULT_MODEL = "anthropic:claude-opus-4-8";
@@ -30,6 +32,7 @@ async function main() {
     .option("-C, --cwd <dir>", "working directory")
     .option("--dangerously-skip-permissions", "auto-approve all tool actions (bypass mode)")
     .option("-c, --continue", "resume the most recent session in this directory")
+    .option("--onboard", "run the provider/key setup flow")
     .action(async (promptParts: string[], options: CliOptions) => {
       try {
         if (options.cwd) process.chdir(options.cwd);
@@ -43,9 +46,20 @@ async function main() {
           return;
         }
 
+        // First-run onboarding: no provider has credentials yet (and we're not
+        // resuming). Also forceable with --onboard.
+        const noProviderReady = !configuredProviders(config).some((p) => p.ready);
+        const startInOnboarding = Boolean(options.onboard) || (!resume && noProviderReady);
+
         // Interactive TUI.
         const { waitUntilExit } = render(
-          <App model={modelSpec} config={config} cwd={process.cwd()} resume={resume} />,
+          <Root
+            config={config}
+            modelSpec={modelSpec}
+            cwd={process.cwd()}
+            resume={resume}
+            startInOnboarding={startInOnboarding}
+          />,
         );
         await waitUntilExit();
       } catch (err) {

@@ -19,7 +19,9 @@ export type CommandResult =
   // Hand a prompt to the agent to run as if the user had asked it (e.g. /init).
   | { type: "runPrompt"; text: string }
   // Summarize older history to free up context.
-  | { type: "compact" };
+  | { type: "compact" }
+  // Re-enter the provider/key onboarding flow.
+  | { type: "onboarding" };
 
 export interface CommandContext {
   config: Config;
@@ -73,6 +75,11 @@ const COMMANDS: CommandDef[] = [
         text: `Providers (${KNOWN_PROVIDERS.length}):\n${lines.join("\n")}`,
       };
     },
+  },
+  {
+    name: "login",
+    summary: "add or change providers and API keys",
+    run: () => ({ type: "onboarding" }),
   },
   {
     name: "permissions",
