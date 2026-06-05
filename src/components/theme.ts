@@ -35,6 +35,8 @@ const TOOL_DISPLAY: Record<string, string> = {
   glob: "Glob",
   grep: "Grep",
   bash: "Bash",
+  bash_output: "BashOutput",
+  kill_shell: "KillShell",
   todo: "TodoWrite",
   task: "Task",
   web_fetch: "WebFetch",

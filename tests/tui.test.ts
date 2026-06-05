@@ -7,6 +7,7 @@ import React from "react";
 import { render } from "ink-testing-library";
 import { App } from "../src/components/App.tsx";
 import { TodoPanel } from "../src/components/TodoPanel.tsx";
+import { EntryView } from "../src/components/Transcript.tsx";
 import { Config } from "../src/config/schema.ts";
 
 // Smoke test: the App renders its full component tree (banner, status bar, input)
@@ -31,6 +32,14 @@ test("App renders banner, status bar, and prompt", async () => {
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
+});
+
+test("EntryView renders a thinking block", () => {
+  const { lastFrame, unmount } = render(
+    React.createElement(EntryView, { entry: { kind: "thinking", text: "weighing two approaches" } }),
+  );
+  assert.match(lastFrame() ?? "", /weighing two approaches/);
+  unmount();
 });
 
 test("TodoPanel hides when empty and lists tasks when populated", () => {

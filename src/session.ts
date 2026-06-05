@@ -9,7 +9,9 @@ import { autoApproveGate, type PermissionGate } from "./permissions/gate.ts";
 import type { SubAgentRunner } from "./tools/context.ts";
 import { TodoStore } from "./tools/todoStore.ts";
 import type { CheckpointStore } from "./memory/checkpoints.ts";
+import type { ProcessRegistry } from "./tools/processRegistry.ts";
 import { HookRunner, loadHooks, wrapToolsWithHooks } from "./hooks/engine.ts";
+import { createLimiter } from "./util/limit.ts";
 
 export interface SessionOptions {
   config: Config;
@@ -24,6 +26,8 @@ export interface SessionOptions {
   checkpoints?: CheckpointStore;
   // Extra tools merged into the toolset (e.g. tools exposed by MCP servers).
   extraTools?: ToolSet;
+  // Background-shell registry for bash run_in_background / bash_output / kill_shell.
+  processes?: ProcessRegistry;
 }
 
 export interface Session {
@@ -43,11 +47,15 @@ export function createSession(opts: SessionOptions): Session {
   const todos = new TodoStore();
   const cache = isAnthropicFamily(resolved.provider, resolved.modelId);
 
+  // Bound how many sub-agents run at once when the model fans `task` calls out.
+  const subAgentLimit = createLimiter(opts.config.maxSubagents);
+
   // A `task` sub-agent: a fresh engine run to completion, returning the text it
   // produced. Without an agent definition it uses the read-only toolset under an
   // auto-approve gate; with one it uses that agent's tools (routed through the parent
   // gate, so any mutations are still user-approved), model override, and instructions.
-  const runSubAgent: SubAgentRunner = async ({ description, prompt, agent }) => {
+  const runSubAgent: SubAgentRunner = ({ description, prompt, agent }) =>
+    subAgentLimit(async () => {
     let model = resolved.model;
     let childCache = cache;
     if (agent?.model) {
@@ -79,7 +87,7 @@ export function createSession(opts: SessionOptions): Session {
       else if (ev.type === "error") return `Sub-agent error: ${ev.error}`;
     }
     return out.trim() || "(sub-agent returned no output)";
-  };
+    });
 
   const hooks = new HookRunner(loadHooks((opts.config as Record<string, unknown>).hooks), opts.cwd);
   const tools = wrapToolsWithHooks(
@@ -90,6 +98,7 @@ export function createSession(opts: SessionOptions): Session {
         todos,
         runSubAgent,
         recordMutation: opts.checkpoints ? (abs) => opts.checkpoints!.recordMutation(abs) : undefined,
+        processes: opts.processes,
       }),
       ...(opts.extraTools ?? {}),
     },
@@ -113,6 +122,8 @@ export function createSession(opts: SessionOptions): Session {
     cacheControl: cache,
     contextBudget: opts.config.contextBudget,
     compactRatio: opts.config.compactRatio,
+    // Extended thinking is Anthropic-only; pass the budget only for that family.
+    thinkingBudget: cache ? opts.config.thinkingBudget : undefined,
   });
 
   return {

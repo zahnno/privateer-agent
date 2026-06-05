@@ -35,6 +35,10 @@ export const Config = z.object({
   vim: z.boolean().default(false),
   // Active output style (persona) by name; loaded from .privateer/output-styles.
   outputStyle: z.string().optional(),
+  // Max `task` sub-agents allowed to run concurrently when the model fans them out.
+  maxSubagents: z.number().int().positive().default(4),
+  // Anthropic extended-thinking budget in tokens (opt-in; Anthropic models only).
+  thinkingBudget: z.number().int().positive().optional(),
 })
   // Preserve unknown keys so layered settings files can carry forward-compatible
   // sections (hooks, mcpServers, statusLine, …) before they have explicit schemas.

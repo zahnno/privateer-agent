@@ -12,6 +12,7 @@ import { PromptInput } from "./PromptInput.tsx";
 import { PlanConfirm } from "./PlanConfirm.tsx";
 import { RewindPicker } from "./RewindPicker.tsx";
 import { CheckpointStore, type RewindScope } from "../memory/checkpoints.ts";
+import { ProcessRegistry } from "../tools/processRegistry.ts";
 import { HookRunner, loadHooks } from "../hooks/engine.ts";
 import type { ToolSet } from "ai";
 import { loadMcpServers, connectMcpServers, type McpStdioClient, type McpConnection } from "../mcp/client.ts";
@@ -100,6 +101,8 @@ export function App({
   // plus a live mirror of the committed transcript length for checkpointing.
   const checkpointsRef = useRef<CheckpointStore>(new CheckpointStore());
   const committedRef = useRef<Entry[]>([]);
+  // Background-shell registry, shared across the session for bash run_in_background.
+  const processesRef = useRef<ProcessRegistry>(new ProcessRegistry());
 
   // The gate reads the live mode via a ref (so changing mode doesn't require
   // rebuilding the session/tools) and surfaces approvals through React state.
@@ -141,6 +144,7 @@ export function App({
         planMode: mode === "plan",
         checkpoints: checkpointsRef.current,
         extraTools: mcpTools,
+        processes: processesRef.current,
       });
       if (prev) {
         session.engine.messages.push(...prev.messages);
@@ -182,6 +186,12 @@ export function App({
   useEffect(() => {
     committedRef.current = committed;
   }, [committed]);
+
+  // Kill any background shells when the app unmounts.
+  useEffect(() => {
+    const procs = processesRef.current;
+    return () => procs.killAll();
+  }, []);
 
   // Connect MCP servers from mcp.json once on mount; their tools merge into the
   // session. Best-effort — failures are reported but never block the app.
@@ -392,6 +402,7 @@ export function App({
     abortRef.current = controller;
     let liveEntries: Entry[] = [];
     let assistantIdx = -1;
+    let thinkingIdx = -1;
     const sync = () => setLive(liveEntries);
     const pushLive = (e: Entry) => {
       liveEntries = [...liveEntries, e];
@@ -418,6 +429,7 @@ export function App({
       for await (const ev of engine.send(sendText, controller.signal)) {
         switch (ev.type) {
           case "text":
+            thinkingIdx = -1;
             if (assistantIdx === -1) {
               pushLive({ kind: "assistant", text: ev.text });
               assistantIdx = liveEntries.length - 1;
@@ -429,9 +441,22 @@ export function App({
               sync();
             }
             break;
+          case "reasoning":
+            if (thinkingIdx === -1) {
+              pushLive({ kind: "thinking", text: ev.text });
+              thinkingIdx = liveEntries.length - 1;
+            } else {
+              const idx = thinkingIdx;
+              liveEntries = liveEntries.map((e, i) =>
+                i === idx && e.kind === "thinking" ? { ...e, text: e.text + ev.text } : e,
+              );
+              sync();
+            }
+            break;
           case "tool-call":
             pushLive({ kind: "tool", id: ev.id, name: ev.name, input: ev.input, status: "running" });
             assistantIdx = -1;
+            thinkingIdx = -1;
             break;
           case "tool-result":
             liveEntries = liveEntries.map((e) =>

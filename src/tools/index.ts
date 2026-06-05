@@ -5,7 +5,7 @@ import { writeTool } from "./write.ts";
 import { editTool } from "./edit.ts";
 import { globTool } from "./glob.ts";
 import { grepTool } from "./grep.ts";
-import { bashTool } from "./bash.ts";
+import { bashTool, bashOutputTool, killShellTool } from "./bash.ts";
 import { todoTool } from "./todo.ts";
 import { taskTool } from "./task.ts";
 import { webFetchTool, webSearchTool } from "./web.ts";
@@ -21,6 +21,8 @@ export function createTools(ctx: ToolContext): ToolSet {
     glob: globTool(ctx),
     grep: grepTool(ctx),
     bash: bashTool(ctx),
+    bash_output: bashOutputTool(ctx),
+    kill_shell: killShellTool(ctx),
     todo: todoTool(ctx),
     task: taskTool(ctx),
     web_fetch: webFetchTool(ctx),

@@ -3,6 +3,7 @@ import { realpathSync } from "node:fs";
 import type { PermissionGate } from "../permissions/gate.ts";
 import type { TodoStore } from "./todoStore.ts";
 import type { AgentDefinition } from "../agents/loader.ts";
+import type { ProcessRegistry } from "./processRegistry.ts";
 
 // Runs a child agent and resolves to its final text answer. With no `agent` it runs the
 // default read-only sub-agent; with one it uses that agent's tools/model/instructions.
@@ -22,6 +23,8 @@ export interface ToolContext {
   // Called by write/edit just before they mutate a file, so the checkpoint store
   // can capture its pre-modification state for /rewind.
   recordMutation?: (abs: string) => void;
+  // Background-shell registry, for bash run_in_background + bash_output/kill_shell.
+  processes?: ProcessRegistry;
 }
 
 // Resolve a possibly-relative path against the session cwd and keep it inside the
