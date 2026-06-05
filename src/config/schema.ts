@@ -39,6 +39,8 @@ export const Config = z.object({
   maxSubagents: z.number().int().positive().default(4),
   // Anthropic extended-thinking budget in tokens (opt-in; Anthropic models only).
   thinkingBudget: z.number().int().positive().optional(),
+  // Shell command whose stdout becomes the status line; receives session JSON on stdin.
+  statusLine: z.string().optional(),
 })
   // Preserve unknown keys so layered settings files can carry forward-compatible
   // sections (hooks, mcpServers, statusLine, …) before they have explicit schemas.

@@ -60,14 +60,28 @@ export class QueryEngine {
 
   constructor(private readonly opts: QueryEngineOptions) {}
 
-  async *send(userText: string, signal?: AbortSignal): AsyncGenerator<EngineEvent, void, void> {
+  async *send(
+    userText: string,
+    signal?: AbortSignal,
+    images?: { data: string; mediaType: string }[],
+  ): AsyncGenerator<EngineEvent, void, void> {
     // Auto-compact before the turn if the context has grown past the budget.
     if (this.shouldCompact()) {
       const res = await this.compact();
       if (res) yield { type: "compacted", before: res.before, after: res.after };
     }
 
-    this.messages.push({ role: "user", content: userText });
+    if (images && images.length > 0) {
+      this.messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: userText },
+          ...images.map((im) => ({ type: "image" as const, image: im.data, mediaType: im.mediaType })),
+        ],
+      });
+    } else {
+      this.messages.push({ role: "user", content: userText });
+    }
 
     let result;
     try {

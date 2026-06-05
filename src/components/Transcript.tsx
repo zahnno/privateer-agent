@@ -5,7 +5,7 @@ import { ToolCallView } from "./ToolCallView.tsx";
 import { theme } from "./theme.ts";
 import { BULLET, WELCOME } from "./figures.ts";
 
-export function EntryView({ entry }: { entry: Entry }) {
+export function EntryView({ entry, verbose }: { entry: Entry; verbose?: boolean }) {
   switch (entry.kind) {
     case "user":
       return (
@@ -37,7 +37,7 @@ export function EntryView({ entry }: { entry: Entry }) {
         </Box>
       );
     case "tool":
-      return <ToolCallView entry={entry} />;
+      return <ToolCallView entry={entry} verbose={verbose} />;
     case "notice":
       return (
         <Box marginTop={1} flexDirection="column">

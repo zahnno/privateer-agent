@@ -29,6 +29,8 @@ export type CommandResult =
   | { type: "compact" }
   // Toggle modal (vim) editing in the prompt input.
   | { type: "toggleVim" }
+  // Toggle full vs truncated tool output in the transcript.
+  | { type: "toggleVerbose" }
   // Switch the active output style (persona); null resets to default.
   | { type: "setOutputStyle"; name: string | null }
   // Write the conversation transcript to a markdown file (path optional).
@@ -304,6 +306,11 @@ const COMMANDS: CommandDef[] = [
     name: "vim",
     summary: "toggle modal (vim) editing in the prompt",
     run: () => ({ type: "toggleVim" }),
+  },
+  {
+    name: "verbose",
+    summary: "toggle full vs truncated tool output",
+    run: () => ({ type: "toggleVerbose" }),
   },
   {
     name: "output-style",

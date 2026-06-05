@@ -18,6 +18,7 @@ import type { ToolSet } from "ai";
 import { loadMcpServers, connectMcpServers, type McpStdioClient, type McpConnection } from "../mcp/client.ts";
 import { TodoPanel } from "./TodoPanel.tsx";
 import { exec } from "../tools/exec.ts";
+import { extractImages } from "../util/images.ts";
 import type { Entry } from "./types.ts";
 import type { TodoStore, TodoItem } from "../tools/todoStore.ts";
 import type { Config, PermissionMode } from "../config/schema.ts";
@@ -89,6 +90,8 @@ export function App({
   const [rewinding, setRewinding] = useState(false);
   const [mcpTools, setMcpTools] = useState<ToolSet>({});
   const mcpRef = useRef<McpConnection | null>(null);
+  const [statusText, setStatusText] = useState("");
+  const [verbose, setVerbose] = useState(false);
   const engineRef = useRef<QueryEngine | null>(null);
   const todosRef = useRef<TodoStore | null>(null);
   const seededRef = useRef(false);
@@ -193,6 +196,22 @@ export function App({
     return () => procs.killAll();
   }, []);
 
+  // Custom status line: run the configured command with session JSON on stdin and use
+  // its first line of stdout. Re-runs when the surfaced state changes. Best-effort.
+  useEffect(() => {
+    const cmd = config.statusLine;
+    if (!cmd) return;
+    let cancelled = false;
+    const payload = JSON.stringify({ model: modelSpec, mode, cwd, tokens: usage.totalTokens });
+    void exec(cmd, [], { cwd, timeoutMs: 5_000, shell: true, input: payload }).then((res) => {
+      if (!cancelled) setStatusText((res.stdout.split("\n")[0] ?? "").trim());
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelSpec, mode, usage.totalTokens]);
+
   // Connect MCP servers from mcp.json once on mount; their tools merge into the
   // session. Best-effort — failures are reported but never block the app.
   useEffect(() => {
@@ -293,6 +312,12 @@ export function App({
         setVim(next);
         trySave({ ...config, vim: next });
         append({ kind: "notice", text: `Vim mode ${next ? "on" : "off"}.` });
+        break;
+      }
+      case "toggleVerbose": {
+        const next = !verbose;
+        setVerbose(next);
+        append({ kind: "notice", text: `Verbose tool output ${next ? "on" : "off"}.` });
         break;
       }
       case "setOutputStyle":
@@ -426,7 +451,12 @@ export function App({
           sendText = `${text}\n\n[Hook context]\n${outcome.additionalContext}`;
         }
       }
-      for await (const ev of engine.send(sendText, controller.signal)) {
+      // Attach any image files referenced in the prompt (vision-capable models only).
+      const images = extractImages(text, cwd);
+      if (images.length > 0) {
+        pushLive({ kind: "notice", text: `Attached ${images.length} image(s).` });
+      }
+      for await (const ev of engine.send(sendText, controller.signal, images)) {
         switch (ev.type) {
           case "text":
             thinkingIdx = -1;
@@ -631,7 +661,7 @@ export function App({
             </Box>
           ) : (
             <Box key={i} paddingX={1}>
-              <EntryView entry={item as Entry} />
+              <EntryView entry={item as Entry} verbose={verbose} />
             </Box>
           )
         }
@@ -639,7 +669,7 @@ export function App({
 
       <Box flexDirection="column" paddingX={1}>
         {live.map((e, i) => (
-          <EntryView key={i} entry={e} />
+          <EntryView key={i} entry={e} verbose={verbose} />
         ))}
 
         {busy && (
@@ -656,7 +686,13 @@ export function App({
 
         <TodoPanel todos={todos} />
 
-        <StatusBar modelSpec={modelSpec} cwd={cwd} totalTokens={usage.totalTokens} mode={mode} />
+        <StatusBar
+          modelSpec={modelSpec}
+          cwd={cwd}
+          totalTokens={usage.totalTokens}
+          mode={mode}
+          custom={statusText || undefined}
+        />
 
         {picking ? (
           <ModelPicker

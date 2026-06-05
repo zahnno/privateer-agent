@@ -11,7 +11,15 @@ export function StatusBar(props: {
   cwd: string;
   totalTokens: number;
   mode: PermissionMode;
+  custom?: string; // settings-driven status line; overrides the default when set
 }) {
+  if (props.custom) {
+    return (
+      <Box marginTop={1}>
+        <Text color={theme.dim}>{props.custom}</Text>
+      </Box>
+    );
+  }
   return (
     <Box marginTop={1} justifyContent="space-between">
       <Box gap={1}>
@@ -21,7 +29,7 @@ export function StatusBar(props: {
         <Text color={theme.dim}>· {basename(props.cwd) || props.cwd}</Text>
         <Text color={theme.dim}>· {props.totalTokens} tok</Text>
       </Box>
-      <Text color={theme.dim}>? for shortcuts</Text>
+      <Text color={theme.dim}>/help · esc interrupts</Text>
     </Box>
   );
 }
