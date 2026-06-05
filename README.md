@@ -12,10 +12,9 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" />
 </p>
 
-A provider-agnostic terminal coding agent, in the spirit of Claude Code — but you
-**bring your own model**. Switch between OpenRouter, Anthropic, OpenAI, and local
-Ollama with one command. Built on the Vercel AI SDK, so tool-calling and streaming
-work identically across every provider.
+A provider-agnostic terminal coding agent — **bring your own model**. Switch between
+OpenRouter, Anthropic, OpenAI, and local Ollama with one command. Built on the Vercel
+AI SDK, so tool-calling and streaming work identically across every provider.
 
 ```
     .-.
@@ -86,7 +85,11 @@ privateer -c                                # resume the last session in this di
 privateer -p "summarize src/"               # headless one-shot, prints to stdout
 ```
 
-Model strings are `provider:model`:
+Run `/model` (no argument) to browse the models each configured provider actually
+offers — the list is fetched live using the API key you entered, then filtered as you
+type. Onboarding ends on the same picker so you choose your default model up front.
+
+You can also pass a model string directly as `provider:model`:
 
 | Example | |
 |---|---|
@@ -100,6 +103,7 @@ Model strings are `provider:model`:
 `/help` `/model [spec]` `/provider` `/permissions [mode]` `/cost` `/init`
 `/todo` `/compact` `/doctor` `/clear` `/exit`
 
+- `/model` — open a picker of each provider's live models (or `/model provider:id` to set one directly).
 - `/init` — the agent explores the repo and writes a `PRIVATEER.md` for you
   (`/init --stub` just drops an empty template, no model call).
 - `/todo` — print the agent's current task list.
@@ -143,8 +147,8 @@ npm test
 
 ## Caveats
 
-Privateer ports Claude Code's design *patterns* onto a provider-agnostic core; a few are
-deliberately simplified:
+Privateer's agent core is built provider-agnostic from the ground up; a few areas are
+deliberately simplified for now:
 
 - **Prompt caching is Anthropic-only.** Ephemeral cache breakpoints are attached for direct
   Anthropic models and OpenRouter routes to `anthropic/*`. Other providers ignore them (a

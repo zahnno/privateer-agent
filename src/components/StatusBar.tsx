@@ -4,7 +4,7 @@ import { basename } from "node:path";
 import type { PermissionMode } from "../config/schema.ts";
 import { theme, MODE_COLOR } from "./theme.ts";
 
-// The footer line rendered directly under the prompt box (Claude Code layout):
+// The footer line rendered directly under the prompt box:
 // mode · model · cwd · tokens on the left, a shortcuts hint on the right.
 export function StatusBar(props: {
   modelSpec: string;

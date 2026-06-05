@@ -1,12 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { Box, Text, Static, useApp, useInput } from "ink";
-import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
 import { Banner } from "./Banner.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { EntryView } from "./Transcript.tsx";
 import { ApprovalPrompt } from "./ApprovalPrompt.tsx";
+import { ModelPicker } from "./ModelPicker.tsx";
+import { PromptInput } from "./PromptInput.tsx";
 import { TodoPanel } from "./TodoPanel.tsx";
+import { exec } from "../tools/exec.ts";
 import type { Entry } from "./types.ts";
 import type { TodoStore, TodoItem } from "../tools/todoStore.ts";
 import type { Config, PermissionMode } from "../config/schema.ts";
@@ -49,19 +53,25 @@ export function App({
   const [committed, setCommitted] = useState<Entry[]>([]);
   const [live, setLive] = useState<Entry[]>([]);
   const [busy, setBusy] = useState(false);
-  const [input, setInput] = useState("");
   const [modelSpec, setModelSpec] = useState(model);
   const [mode, setMode] = useState<PermissionMode>(config.permissionMode);
   const [usage, setUsage] = useState<UsageTotals>(resume?.usage ?? emptyUsage());
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingApproval | null>(null);
+  const [picking, setPicking] = useState(false);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [verb, setVerb] = useState(randomVerb());
   const [elapsed, setElapsed] = useState(0);
+  const [queued, setQueued] = useState(0);
+  const [vim, setVim] = useState<boolean>(Boolean(config.vim));
   const engineRef = useRef<QueryEngine | null>(null);
   const todosRef = useRef<TodoStore | null>(null);
   const seededRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Input history (↑/↓) and the type-ahead queue for messages entered while busy.
+  const historyRef = useRef<string[]>([]);
+  const queueRef = useRef<string[]>([]);
+  const drainingRef = useRef(false);
 
   // The gate reads the live mode via a ref (so changing mode doesn't require
   // rebuilding the session/tools) and surfaces approvals through React state.
@@ -169,9 +179,10 @@ export function App({
         persist();
         break;
       case "setModel":
-        setModelSpec(res.spec);
-        trySave({ ...config, defaultModel: res.spec });
-        append({ kind: "notice", text: `Model set to ${res.spec}` });
+        applyModel(res.spec);
+        break;
+      case "pickModel":
+        setPicking(true);
         break;
       case "setMode":
         setMode(res.mode);
@@ -184,6 +195,13 @@ export function App({
       case "compact":
         void doCompact();
         break;
+      case "toggleVim": {
+        const next = !vim;
+        setVim(next);
+        trySave({ ...config, vim: next });
+        append({ kind: "notice", text: `Vim mode ${next ? "on" : "off"}.` });
+        break;
+      }
       case "onboarding":
         onLogin?.();
         break;
@@ -211,6 +229,12 @@ export function App({
     } finally {
       setBusy(false);
     }
+  }
+
+  function applyModel(spec: string) {
+    setModelSpec(spec);
+    trySave({ ...config, defaultModel: spec });
+    append({ kind: "notice", text: `Model set to ${spec}` });
   }
 
   function trySave(next: Config) {
@@ -302,15 +326,95 @@ export function App({
     }
   }
 
-  function onSubmit(value: string) {
+  // Entry point from the prompt input. While a turn is running, messages are
+  // queued and drained in order when it finishes.
+  function handleInput(value: string) {
     const text = value.trim();
-    setInput("");
-    if (!text || busy) return;
+    if (!text) return;
+    if (busy || drainingRef.current) {
+      queueRef.current.push(value);
+      setQueued(queueRef.current.length);
+      append({ kind: "notice", text: `Queued (${queueRef.current.length}) — runs after the current turn.` });
+      return;
+    }
+    void dispatchInput(value);
+  }
+
+  async function dispatchInput(value: string) {
+    const text = value.trim();
     if (text.startsWith("/")) {
       handleCommand(text);
       return;
     }
-    void runTurn(text);
+    if (text.startsWith("!")) {
+      await runBash(text.slice(1).trim());
+      return;
+    }
+    if (text.startsWith("#")) {
+      addMemory(text.slice(1).trim());
+      return;
+    }
+    await runTurn(text);
+  }
+
+  // Drain queued messages once the UI is idle. Runs them sequentially so turns
+  // never overlap.
+  async function drainQueue() {
+    if (drainingRef.current || busy) return;
+    drainingRef.current = true;
+    try {
+      while (queueRef.current.length > 0) {
+        const next = queueRef.current.shift()!;
+        setQueued(queueRef.current.length);
+        await dispatchInput(next);
+      }
+    } finally {
+      drainingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!busy) void drainQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy]);
+
+  // `!cmd` — run a shell command locally and show its output, without a model turn.
+  async function runBash(cmd: string) {
+    if (!cmd) return;
+    append({ kind: "user", text: `!${cmd}` });
+    setBusy(true);
+    try {
+      const res = await exec(cmd, [], { cwd, timeoutMs: 120_000, shell: true });
+      const out = [res.stdout, res.stderr].filter(Boolean).join("\n").trim();
+      append({
+        kind: "tool",
+        id: `bash-${Date.now()}`,
+        name: "bash",
+        input: { command: cmd },
+        status: res.code === 0 ? "done" : "error",
+        output: out || "(no output)",
+        error: res.code === 0 ? undefined : res.timedOut ? "timed out" : `exit ${res.code}`,
+      });
+    } catch (err) {
+      append({ kind: "notice", tone: "error", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // `#note` — append a bullet to the project's PRIVATEER.md memory file.
+  function addMemory(note: string) {
+    if (!note) return;
+    const path = join(cwd, "PRIVATEER.md");
+    try {
+      const head = existsSync(path)
+        ? readFileSync(path, "utf8").replace(/\s*$/, "") + "\n"
+        : "# Project context\n";
+      writeFileSync(path, `${head}\n- ${note}\n`, "utf8");
+      append({ kind: "notice", text: `Added to memory (PRIVATEER.md): ${note}` });
+    } catch (err) {
+      append({ kind: "notice", tone: "error", text: `Could not write PRIVATEER.md: ${String(err)}` });
+    }
   }
 
   const staticItems: (typeof BANNER | Entry)[] = [BANNER, ...committed];
@@ -352,7 +456,16 @@ export function App({
 
         <StatusBar modelSpec={modelSpec} cwd={cwd} totalTokens={usage.totalTokens} mode={mode} />
 
-        {pending ? (
+        {picking ? (
+          <ModelPicker
+            config={config}
+            onSelect={(spec) => {
+              setPicking(false);
+              applyModel(spec);
+            }}
+            onCancel={() => setPicking(false)}
+          />
+        ) : pending ? (
           <ApprovalPrompt
             req={pending.req}
             onRespond={(outcome) => {
@@ -361,15 +474,18 @@ export function App({
             }}
           />
         ) : (
-          <Box borderStyle="round" borderColor={busy ? theme.dim : theme.accent} paddingX={1}>
-            <Text color={busy ? theme.dim : theme.accent}>{"> "}</Text>
-            <TextInput
-              value={input}
-              onChange={setInput}
-              onSubmit={onSubmit}
-              placeholder={busy ? "working…" : "type a prompt, or /help"}
-            />
-          </Box>
+          <PromptInput
+            busy={busy}
+            cwd={cwd}
+            queued={queued}
+            vimEnabled={vim}
+            history={historyRef}
+            onSubmit={handleInput}
+            onClear={() => {
+              setCommitted([]);
+              setLive([]);
+            }}
+          />
         )}
       </Box>
     </Box>

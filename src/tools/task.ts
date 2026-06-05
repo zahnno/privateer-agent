@@ -2,13 +2,13 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { ToolContext } from "./context.ts";
 
-// Claude Code's AgentTool, scaled down: delegate an open-ended investigation to a
-// read-only sub-agent that runs its own loop and returns just a summary, keeping the
-// parent conversation small. The sub-agent has read/glob/grep only — it cannot mutate
-// the filesystem or spawn further sub-agents (no recursion).
+// Delegation tool: hand an open-ended investigation to a read-only sub-agent that
+// runs its own loop and returns just a summary, keeping the parent conversation
+// small. The sub-agent has read/glob/grep only — it cannot mutate the filesystem or
+// spawn further sub-agents (no recursion).
 //
-// Caveat vs. CC: this runs synchronously (one sub-agent at a time), not as async
-// parallel workers.
+// Note: this runs synchronously (one sub-agent at a time), not as async parallel
+// workers.
 export function taskTool(ctx: ToolContext) {
   return tool({
     description:

@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gitStatus, dirSnapshot } from "./projectInfo.ts";
 
-// The system prompt is assembled from modular sections, mirroring how Claude Code
-// composes static + dynamic prompt segments. Static sections (identity, tone, tool
+// The system prompt is assembled from modular sections: static segments first,
+// then a dynamic environment block. Static sections (identity, tone, tool
 // policy) come first so they stay byte-stable across turns and cache well; the
 // dynamic environment block (cwd, git status, snapshot) comes last. `buildSystemPrompt`
 // stays a pure synchronous string builder — the only I/O is reading project files and

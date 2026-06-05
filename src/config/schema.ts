@@ -31,7 +31,12 @@ export const Config = z.object({
   contextBudget: z.number().int().positive().default(120_000),
   // Fraction of contextBudget at which to auto-compact older history (0–1).
   compactRatio: z.number().positive().max(1).default(0.8),
-});
+  // Modal (vim) editing in the prompt input.
+  vim: z.boolean().default(false),
+})
+  // Preserve unknown keys so layered settings files can carry forward-compatible
+  // sections (hooks, mcpServers, statusLine, …) before they have explicit schemas.
+  .catchall(z.unknown());
 export type Config = z.infer<typeof Config>;
 
 export const KNOWN_PROVIDERS = ["openrouter", "anthropic", "openai", "ollama"] as const;

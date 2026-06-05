@@ -2,6 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config, PermissionMode } from "../config/schema.ts";
 import { PERMISSION_MODES } from "../config/schema.ts";
+import { configLayers } from "../config/load.ts";
 import { configuredProviders, parseModelSpec } from "../providers/resolve.ts";
 import { KNOWN_PROVIDERS } from "../config/schema.ts";
 import type { UsageTotals } from "../engine/events.ts";
@@ -15,11 +16,15 @@ export type CommandResult =
   | { type: "clear" }
   | { type: "exit" }
   | { type: "setModel"; spec: string }
+  // Open the interactive model picker (fetches each provider's models live).
+  | { type: "pickModel" }
   | { type: "setMode"; mode: PermissionMode }
   // Hand a prompt to the agent to run as if the user had asked it (e.g. /init).
   | { type: "runPrompt"; text: string }
   // Summarize older history to free up context.
   | { type: "compact" }
+  // Toggle modal (vim) editing in the prompt input.
+  | { type: "toggleVim" }
   // Re-enter the provider/key onboarding flow.
   | { type: "onboarding" };
 
@@ -51,10 +56,11 @@ const COMMANDS: CommandDef[] = [
   },
   {
     name: "model",
-    summary: "show or set the model (provider:model)",
-    run: (args, ctx) => {
+    summary: "pick a model from your providers, or set one (provider:model)",
+    run: (args) => {
       const spec = args.trim();
-      if (!spec) return { type: "notice", text: `Current model: ${ctx.modelSpec}` };
+      // No argument: open the interactive picker that lists each provider's live models.
+      if (!spec) return { type: "pickModel" };
       try {
         parseModelSpec(spec); // validate shape
       } catch (err) {
@@ -122,7 +128,7 @@ const COMMANDS: CommandDef[] = [
         );
         return { type: "notice", text: "Created PRIVATEER.md (stub)." };
       }
-      // Default: let the agent investigate and write the file itself, like CC's /init.
+      // Default: let the agent investigate and write the file itself.
       const verb = existsSync(path) ? "Update" : "Create";
       return {
         type: "runPrompt",
@@ -142,6 +148,9 @@ const COMMANDS: CommandDef[] = [
       const provs = configuredProviders(ctx.config)
         .map((p) => `${p.name}:${p.ready ? "ready" : "—"}`)
         .join("  ");
+      const layers = configLayers()
+        .map((l) => `    ${l.present ? "✓" : "·"} ${l.label} — ${l.path}`)
+        .join("\n");
       return {
         type: "notice",
         text:
@@ -150,7 +159,24 @@ const COMMANDS: CommandDef[] = [
           `  cwd: ${ctx.cwd}\n` +
           `  model: ${ctx.modelSpec}\n` +
           `  mode: ${ctx.mode}\n` +
-          `  providers: ${provs}`,
+          `  providers: ${provs}\n` +
+          `  config layers (low→high):\n${layers}`,
+      };
+    },
+  },
+  {
+    name: "config",
+    summary: "show the resolved settings layers (low→high precedence)",
+    run: () => {
+      const lines = configLayers().map(
+        (l) => `  ${l.present ? "✓ loaded" : "· absent"}  ${l.label}\n      ${l.path}`,
+      );
+      return {
+        type: "notice",
+        text:
+          "Settings layers (each overrides the ones above it):\n" +
+          lines.join("\n") +
+          "\n\nEdit any settings.json above; project settings.local.json is git-ignored.",
       };
     },
   },
@@ -170,6 +196,11 @@ const COMMANDS: CommandDef[] = [
     run: () => ({ type: "compact" }),
   },
   {
+    name: "vim",
+    summary: "toggle modal (vim) editing in the prompt",
+    run: () => ({ type: "toggleVim" }),
+  },
+  {
     name: "clear",
     summary: "clear the conversation",
     run: () => ({ type: "clear" }),
@@ -183,6 +214,12 @@ const COMMANDS: CommandDef[] = [
 ];
 
 export const COMMAND_NAMES = COMMANDS.map((c) => c.name);
+
+// Name + summary for each command, for the slash-command autocomplete menu.
+export const COMMAND_LIST: { name: string; summary: string }[] = COMMANDS.map((c) => ({
+  name: c.name,
+  summary: c.summary,
+}));
 
 // Parse and run a "/command args" line. Returns null if not a slash command.
 export function runCommand(raw: string, ctx: CommandContext): CommandResult | null {

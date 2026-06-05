@@ -156,8 +156,8 @@ export class QueryEngine {
   }
 
   // Summarize older history into a single briefing message, keeping the most recent
-  // messages verbatim. Mirrors Claude Code's auto-compact; the summarizer is a plain
-  // one-shot generate over a serialized transcript (no structured-output tool), so it
+  // messages verbatim. The summarizer is a plain one-shot generate over a serialized
+  // transcript (no structured-output tool), so it
   // can't orphan tool-call/result pairs. Returns before/after token estimates, or null
   // when there's nothing worth compacting. Best-effort: failures leave history intact.
   async compact(): Promise<{ before: number; after: number } | null> {
