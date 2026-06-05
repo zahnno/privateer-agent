@@ -5,6 +5,8 @@ import { PERMISSION_MODES } from "../config/schema.ts";
 import { configLayers } from "../config/load.ts";
 import { expandCommand, type CustomCommand } from "./custom.ts";
 import { loadOutputStyles } from "../context/outputStyles.ts";
+import { loadAgents } from "../agents/loader.ts";
+import { loadHooks } from "../hooks/engine.ts";
 import { configuredProviders, parseModelSpec } from "../providers/resolve.ts";
 import { KNOWN_PROVIDERS } from "../config/schema.ts";
 import type { UsageTotals } from "../engine/events.ts";
@@ -33,6 +35,8 @@ export type CommandResult =
   | { type: "export"; path?: string }
   // Open the checkpoint picker to rewind conversation and/or files.
   | { type: "rewind" }
+  // Show live MCP server/tool status (resolved by the App).
+  | { type: "mcp" }
   // Re-enter the provider/key onboarding flow.
   | { type: "onboarding" };
 
@@ -246,6 +250,50 @@ const COMMANDS: CommandDef[] = [
     name: "rewind",
     summary: "restore an earlier checkpoint (conversation and/or files)",
     run: () => ({ type: "rewind" }),
+  },
+  {
+    name: "mcp",
+    summary: "show MCP server connection status",
+    run: () => ({ type: "mcp" }),
+  },
+  {
+    name: "hooks",
+    summary: "list configured lifecycle hooks",
+    run: (_args, ctx) => {
+      const hooks = loadHooks((ctx.config as Record<string, unknown>).hooks);
+      const events = Object.keys(hooks);
+      if (events.length === 0) {
+        return {
+          type: "notice",
+          text: "No hooks configured. Add a `hooks` section to .privateer/settings.json (events: PreToolUse, PostToolUse, UserPromptSubmit, Stop).",
+        };
+      }
+      const lines = events.flatMap((ev) =>
+        (hooks[ev as keyof typeof hooks] ?? []).map(
+          (h) => `  ${ev}${h.matcher ? ` [${h.matcher}]` : ""}: ${h.command}`,
+        ),
+      );
+      return { type: "notice", text: `Hooks:\n${lines.join("\n")}` };
+    },
+  },
+  {
+    name: "agents",
+    summary: "list custom sub-agents from .privateer/agents",
+    run: (_args, ctx) => {
+      const agents = loadAgents(ctx.cwd);
+      if (agents.length === 0) {
+        return {
+          type: "notice",
+          text: "No custom sub-agents. Add markdown files under .privateer/agents/ (use them via the task tool's subagent_type).",
+        };
+      }
+      const lines = agents.map((a) => {
+        const tools = a.tools?.length ? a.tools.join(", ") : "read, glob, grep";
+        const model = a.model ? ` · ${a.model}` : "";
+        return `  ${a.name} (${a.scope})${model}\n    ${a.description}\n    tools: ${tools}`;
+      });
+      return { type: "notice", text: `Sub-agents:\n${lines.join("\n")}` };
+    },
   },
   {
     name: "compact",

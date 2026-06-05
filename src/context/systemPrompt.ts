@@ -71,6 +71,22 @@ export function buildSubAgentPrompt(opts: SystemPromptOptions & { description: s
   ].join("\n\n");
 }
 
+// System prompt for a user-defined sub-agent: the agent's own instructions plus the
+// shared identity/security stance and an autonomous report-back mandate.
+export function buildAgentPrompt(
+  opts: SystemPromptOptions & { description: string; instructions: string },
+): string {
+  return [
+    IDENTITY,
+    opts.instructions,
+    SECURITY,
+    `You are running as a sub-agent for the task: "${opts.description}". Work autonomously and ` +
+      `return a concise, self-contained final report (reference concrete file paths). Do not ask ` +
+      `the user questions — your final message is your whole report.`,
+    `Environment:\n- cwd: ${opts.cwd}\n- platform: ${process.platform}`,
+  ].join("\n\n");
+}
+
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
   // An active output style replaces the default tone/persona section.
   const persona = opts.outputStyleBody?.trim() || TONE;

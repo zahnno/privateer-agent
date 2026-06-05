@@ -2,10 +2,16 @@ import { resolve, isAbsolute, relative, sep } from "node:path";
 import { realpathSync } from "node:fs";
 import type { PermissionGate } from "../permissions/gate.ts";
 import type { TodoStore } from "./todoStore.ts";
+import type { AgentDefinition } from "../agents/loader.ts";
 
-// Runs a restricted, read-only child agent and resolves to its final text answer.
+// Runs a child agent and resolves to its final text answer. With no `agent` it runs the
+// default read-only sub-agent; with one it uses that agent's tools/model/instructions.
 // Supplied by the session (which has the model + config); absent in bare tool contexts.
-export type SubAgentRunner = (input: { description: string; prompt: string }) => Promise<string>;
+export type SubAgentRunner = (input: {
+  description: string;
+  prompt: string;
+  agent?: AgentDefinition;
+}) => Promise<string>;
 
 // Shared state handed to every tool's execute().
 export interface ToolContext {

@@ -12,6 +12,9 @@ import { PromptInput } from "./PromptInput.tsx";
 import { PlanConfirm } from "./PlanConfirm.tsx";
 import { RewindPicker } from "./RewindPicker.tsx";
 import { CheckpointStore, type RewindScope } from "../memory/checkpoints.ts";
+import { HookRunner, loadHooks } from "../hooks/engine.ts";
+import type { ToolSet } from "ai";
+import { loadMcpServers, connectMcpServers, type McpStdioClient, type McpConnection } from "../mcp/client.ts";
 import { TodoPanel } from "./TodoPanel.tsx";
 import { exec } from "../tools/exec.ts";
 import type { Entry } from "./types.ts";
@@ -83,6 +86,8 @@ export function App({
   const [outputStyle, setOutputStyle] = useState<string | null>(config.outputStyle ?? null);
   const [planReady, setPlanReady] = useState(false);
   const [rewinding, setRewinding] = useState(false);
+  const [mcpTools, setMcpTools] = useState<ToolSet>({});
+  const mcpRef = useRef<McpConnection | null>(null);
   const engineRef = useRef<QueryEngine | null>(null);
   const todosRef = useRef<TodoStore | null>(null);
   const seededRef = useRef(false);
@@ -107,6 +112,8 @@ export function App({
   // Custom slash commands from .privateer/commands, plus the merged autocomplete list.
   const customCommands = useMemo(() => loadCustomCommands(cwd), [cwd]);
   const commands = useMemo(() => commandList(customCommands), [customCommands]);
+  // Lifecycle hooks (UserPromptSubmit / Stop) configured in settings.
+  const hooks = useMemo(() => new HookRunner(loadHooks((config as any).hooks), cwd), [cwd]);
 
   const gate = useMemo(
     () =>
@@ -133,6 +140,7 @@ export function App({
         outputStyle: outputStyle ?? undefined,
         planMode: mode === "plan",
         checkpoints: checkpointsRef.current,
+        extraTools: mcpTools,
       });
       if (prev) {
         session.engine.messages.push(...prev.messages);
@@ -157,7 +165,7 @@ export function App({
     // Rebuild on model/style change, and when entering/leaving plan mode (so the
     // system prompt gains or loses the plan-mode mandate) — not on every mode change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelSpec, outputStyle, mode === "plan"]);
+  }, [modelSpec, outputStyle, mode === "plan", mcpTools]);
 
   // One-time notice when resuming a prior conversation.
   useEffect(() => {
@@ -174,6 +182,36 @@ export function App({
   useEffect(() => {
     committedRef.current = committed;
   }, [committed]);
+
+  // Connect MCP servers from mcp.json once on mount; their tools merge into the
+  // session. Best-effort — failures are reported but never block the app.
+  useEffect(() => {
+    const servers = loadMcpServers(cwd);
+    if (Object.keys(servers).length === 0) return;
+    let cancelled = false;
+    void connectMcpServers(servers, cwd, gate).then((conn) => {
+      if (cancelled) {
+        conn.clients.forEach((c) => c.close());
+        return;
+      }
+      mcpRef.current = conn;
+      setMcpTools(conn.tools);
+      const ok = conn.status.filter((s) => !s.error);
+      const failed = conn.status.filter((s) => s.error);
+      if (ok.length) {
+        const n = ok.reduce((a, s) => a + s.tools, 0);
+        append({ kind: "notice", text: `MCP: connected ${ok.length} server(s), ${n} tool(s).` });
+      }
+      for (const s of failed) {
+        append({ kind: "notice", tone: "error", text: `MCP server "${s.server}" failed: ${s.error}` });
+      }
+    });
+    return () => {
+      cancelled = true;
+      mcpRef.current?.clients.forEach((c) => c.close());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cwd]);
 
   function persist() {
     const eng = engineRef.current;
@@ -252,6 +290,21 @@ export function App({
         trySave({ ...config, outputStyle: res.name ?? undefined });
         append({ kind: "notice", text: `Output style: ${res.name ?? "default"}.` });
         break;
+      case "mcp": {
+        const conn = mcpRef.current;
+        if (!conn || conn.status.length === 0) {
+          append({
+            kind: "notice",
+            text: "No MCP servers. Add a `mcpServers` map to .privateer/mcp.json.",
+          });
+        } else {
+          const lines = conn.status.map((s) =>
+            s.error ? `  ✗ ${s.server} — ${s.error}` : `  ✓ ${s.server} — ${s.tools} tool(s)`,
+          );
+          append({ kind: "notice", text: `MCP servers:\n${lines.join("\n")}` });
+        }
+        break;
+      }
       case "rewind":
         if (checkpointsRef.current.list().length === 0) {
           append({ kind: "notice", text: "No checkpoints yet — they're taken before each turn." });
@@ -345,8 +398,24 @@ export function App({
       sync();
     };
 
+    let sendText = text;
     try {
-      for await (const ev of engine.send(text, controller.signal)) {
+      // UserPromptSubmit hooks may veto the turn or inject extra context.
+      if (hooks.has("UserPromptSubmit")) {
+        const outcome = await hooks.prompt(text);
+        if (outcome.block) {
+          pushLive({
+            kind: "notice",
+            tone: "error",
+            text: `Prompt blocked by hook${outcome.reason ? `: ${outcome.reason}` : ""}.`,
+          });
+          return;
+        }
+        if (outcome.additionalContext) {
+          sendText = `${text}\n\n[Hook context]\n${outcome.additionalContext}`;
+        }
+      }
+      for await (const ev of engine.send(sendText, controller.signal)) {
         switch (ev.type) {
           case "text":
             if (assistantIdx === -1) {
@@ -399,6 +468,7 @@ export function App({
       setCommitted((c) => [...c, ...finalEntries]);
       setBusy(false);
       persist();
+      if (hooks.has("Stop")) void hooks.stop();
       // In plan mode, once the agent has presented a plan, offer to leave plan mode.
       if (
         !opts?.skipPlanConfirm &&
