@@ -13,6 +13,9 @@ interface CliOptions {
   model?: string;
   cwd?: string;
   dangerouslySkipPermissions?: boolean;
+  // Commander treats `--no-quarter` as a negatable boolean: `quarter` is true by
+  // default and becomes false when the flag is passed.
+  quarter?: boolean;
   continue?: boolean;
   onboard?: boolean;
 }
@@ -31,13 +34,15 @@ async function main() {
     .option("-m, --model <provider:model>", "model to use, e.g. openrouter:anthropic/claude-opus-4.8")
     .option("-C, --cwd <dir>", "working directory")
     .option("--dangerously-skip-permissions", "auto-approve all tool actions (bypass mode)")
+    .option("--no-quarter", "auto-approve all tool actions, taking no prisoners (bypass mode)")
     .option("-c, --continue", "resume the most recent session in this directory")
     .option("--onboard", "run the provider/key setup flow")
     .action(async (promptParts: string[], options: CliOptions) => {
       try {
         if (options.cwd) process.chdir(options.cwd);
         const config = loadConfig();
-        if (options.dangerouslySkipPermissions) config.permissionMode = "bypass";
+        if (options.dangerouslySkipPermissions || options.quarter === false)
+          config.permissionMode = "bypass";
         const resume = options.continue ? loadLatest(process.cwd()) : null;
         const modelSpec = options.model ?? resume?.modelSpec ?? config.defaultModel ?? DEFAULT_MODEL;
 

@@ -43,7 +43,7 @@ function writeJson(path: string, obj: unknown): void {
 test("defaults apply when no config files exist", () => {
   withScopes(() => {
     const cfg = loadConfig();
-    assert.equal(cfg.permissionMode, "default");
+    assert.equal(cfg.permissionMode, "acceptEdits");
     assert.equal(cfg.maxSteps, 50);
     assert.deepEqual(cfg.allowlist, []);
   });

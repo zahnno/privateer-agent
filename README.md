@@ -22,17 +22,6 @@ Switch between **OpenRouter**, **Anthropic**, **OpenAI**, and local **Ollama** w
 command. Built on the Vercel AI SDK, so tool-calling and streaming work identically across
 every provider — no model lock-in, no separate code paths.
 
-```
-    .-.
-   |___|
-   | + |
-   '-+-'      
-  ---|---
- _   |   _
-  \  |  / 
-   \_|_/
-```
-
 ## Why Privateer?
 
 - **No lock-in.** Point it at a frontier model today and a local Ollama model tomorrow —
@@ -224,8 +213,8 @@ Everything below is optional and lives under `.privateer/` (project) or `~/.priv
 | Mode | Behavior |
 |---|---|
 | `default` | prompt before edits and shell commands |
-| `acceptEdits` | auto-approve file edits; still prompt for other shell commands |
-| `bypass` | no prompts (also `--dangerously-skip-permissions`) |
+| `acceptEdits` | auto-approve file edits; still prompt for other shell commands (the default) |
+| `bypass` | no prompts (also `--dangerously-skip-permissions` or `--no-quarter`) |
 | `plan` | read-only; the agent presents a plan, then you approve to leave plan mode |
 
 At an approval prompt: **y** allow once · **a** always · **n** deny. In plan mode, after the

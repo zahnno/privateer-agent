@@ -14,7 +14,7 @@ export type PermissionMode = (typeof PERMISSION_MODES)[number];
 export const Config = z.object({
   // "provider:model", e.g. "openrouter:anthropic/claude-opus-4.8".
   defaultModel: z.string().default("anthropic:claude-opus-4-8"),
-  permissionMode: z.enum(PERMISSION_MODES).default("default"),
+  permissionMode: z.enum(PERMISSION_MODES).default("acceptEdits"),
   providers: z
     .object({
       openrouter: ProviderConfig.optional(),

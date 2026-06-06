@@ -5,6 +5,19 @@ import { ToolCallView } from "./ToolCallView.tsx";
 import { theme } from "./theme.ts";
 import { BULLET, WELCOME } from "./figures.ts";
 
+// Pull a trailing `recap: …` line off an assistant message so it can be styled
+// separately. Only the last line is considered, and only if it starts with the
+// marker; otherwise the whole text is the body and there's no recap.
+function splitRecap(text: string): { body: string; recap?: string } {
+  const trimmed = text.replace(/\s+$/, "");
+  const nl = trimmed.lastIndexOf("\n");
+  const lastLine = trimmed.slice(nl + 1);
+  if (/^recap:\s*/i.test(lastLine)) {
+    return { body: trimmed.slice(0, nl < 0 ? 0 : nl).replace(/\s+$/, ""), recap: lastLine };
+  }
+  return { body: text };
+}
+
 export function EntryView({
   entry,
   verbose,
@@ -22,16 +35,32 @@ export function EntryView({
           <Text color={theme.dim}>{entry.text}</Text>
         </Box>
       );
-    case "assistant":
+    case "assistant": {
+      // Split off a trailing `recap:` line so it can render dimmed below the
+      // response body. The model is asked to end each turn with one such line.
+      const { body, recap } = splitRecap(entry.text);
       // ⏺ bullet in its own column so wrapped lines align under the text.
       return (
-        <Box marginTop={1}>
-          <Text color={theme.accent}>{BULLET} </Text>
-          <Box flexGrow={1}>
-            <Text>{entry.text}</Text>
+        <Box marginTop={1} flexDirection="column">
+          <Box>
+            <Text color={theme.accent}>{BULLET} </Text>
+            <Box flexGrow={1}>
+              <Text>{body}</Text>
+            </Box>
           </Box>
+          {recap && (
+            <Box marginTop={1}>
+              <Text color={theme.dim}>{"  "}</Text>
+              <Box flexGrow={1}>
+                <Text color={theme.dim} dimColor>
+                  {recap}
+                </Text>
+              </Box>
+            </Box>
+          )}
         </Box>
       );
+    }
     case "thinking": {
       // The model's reasoning, rendered dimmed under a thinking mark. When
       // collapsed (Ctrl+O), show just a one-line summary instead of the full text.

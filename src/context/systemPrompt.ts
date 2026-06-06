@@ -39,10 +39,16 @@ stay out of the main conversation; it returns just a summary.
 - Use 'bash' for builds, tests, git, and other CLI work. Avoid long-running or interactive commands.
 - When you create a git commit, end the message with a blank line followed by this trailer so the \
 work is attributed to Privateer as a co-author:
-  Co-Authored-By: Privateer <privateer@noreply.local>
+  Co-Authored-By: Privateer <support@privateer.pro>
 - Use 'web_fetch' to read a known URL when the user provides one or you need current docs.
 - Mutating actions (write/edit/bash) may require user approval; that's expected — proceed and let \
 the gate handle it.`;
+
+const RECAP = `Recaps:
+- End every response with a single final line that begins with "recap: " — one plain-language \
+sentence summarizing what the user has accomplished so far this session (their goals and the \
+changes they've driven), not a restatement of what you just did. Keep it to one line; if nothing \
+has happened yet, recap the user's stated goal.`;
 
 const PLAN_MODE = `Plan mode is active. Your write, edit, and bash tools are disabled — do not attempt to \
 modify files or run commands. Investigate with read, glob, and grep, then present a clear, \
@@ -93,7 +99,7 @@ export function buildAgentPrompt(
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
   // An active output style replaces the default tone/persona section.
   const persona = opts.outputStyleBody?.trim() || TONE;
-  const parts: string[] = [IDENTITY, persona, SECURITY, TOOL_POLICY];
+  const parts: string[] = [IDENTITY, persona, SECURITY, TOOL_POLICY, RECAP];
   if (opts.planMode) parts.push(PLAN_MODE);
 
   // --- Dynamic environment section ---
