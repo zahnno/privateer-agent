@@ -1,5 +1,5 @@
 {
-  "name": "privateer",
+  "name": "privateer-agent",
   "version": "0.1.0",
   "description": "Privateer — a provider-agnostic terminal coding agent. Bring your own model (OpenRouter, Anthropic, OpenAI, Ollama).",
   "type": "module",
@@ -7,7 +7,7 @@
   "author": "Patrick (zahnno)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zahnno/privateer-agentic-tui.git"
+    "url": "git+https://github.com/privateer-agent/privateer-agent.git"
   },
   "keywords": [
     "ai",

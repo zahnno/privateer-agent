@@ -5,3 +5,13 @@ dist/
 .DS_Store
 
 .reference/
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json

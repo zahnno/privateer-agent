@@ -15,7 +15,7 @@ async function fetchText(url: string): Promise<{ status: number; contentType: st
     const res = await fetch(url, {
       signal: ac.signal,
       redirect: "follow",
-      headers: { "user-agent": "privateer/0.0.1 (+https://github.com/zahnno/privateer-agentic-tui)" },
+      headers: { "user-agent": "privateer-agent/0.1.0 (+https://github.com/privateer-agent/privateer-agent)" },
     });
     const body = (await res.text()).slice(0, MAX_BYTES);
     return { status: res.status, contentType: res.headers.get("content-type") ?? "", body };

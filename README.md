@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/zahnno/privateer-agentic-tui/actions/workflows/ci.yml">
-    <img src="https://github.com/zahnno/privateer-agentic-tui/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  <a href="https://github.com/privateer-agent/privateer-agent/actions/workflows/ci.yml">
+    <img src="https://github.com/privateer-agent/privateer-agent/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
   <img src="https://img.shields.io/badge/node-%E2%89%A520-brightgreen" alt="Node >= 20" />
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" />
@@ -48,8 +48,8 @@ every provider — no model lock-in, no separate code paths.
 ## Quickstart
 
 ```bash
-git clone https://github.com/zahnno/privateer-agentic-tui.git
-cd privateer-agentic-tui
+git clone https://github.com/privateer-agent/privateer-agent.git
+cd privateer-agent
 npm install
 export OPENROUTER_API_KEY=sk-or-...     # one provider is enough
 npm start                               # launches the interactive TUI
