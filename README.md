@@ -22,6 +22,10 @@ Switch between **OpenRouter**, **Anthropic**, **OpenAI**, and local **Ollama** w
 command. Built on the Vercel AI SDK, so tool-calling and streaming work identically across
 every provider — no model lock-in, no separate code paths.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Privateer running in the terminal" width="820" />
+</p>
+
 ## Why Privateer?
 
 - **No lock-in.** Point it at a frontier model today and a local Ollama model tomorrow —
