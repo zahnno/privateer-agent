@@ -252,3 +252,27 @@ test("a pre-aborted turn ends cleanly and persists partial history", async () =>
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+import { effectiveTokens } from "../src/engine/events.ts";
+
+test("effectiveTokens discounts cache reads and degrades to total without them", () => {
+  // No cache hits: collapses to input + output (== raw totalTokens).
+  assert.equal(
+    effectiveTokens({ inputTokens: 1000, outputTokens: 200, totalTokens: 1200, cachedInputTokens: 0 }),
+    1200,
+  );
+
+  // OpenRouter convention: inputTokens (prompt_tokens) includes the cached subset.
+  // 1000 input, 800 of it cached → 200 full-price + 800*0.1 + 200 out = 480.
+  assert.equal(
+    effectiveTokens({ inputTokens: 1000, outputTokens: 200, totalTokens: 1200, cachedInputTokens: 800 }),
+    480,
+  );
+
+  // Anthropic convention: inputTokens counts only fresh tokens, cached reported
+  // separately (cached > input). 100 fresh + 900 cached*0.1 + 50 out = 240.
+  assert.equal(
+    effectiveTokens({ inputTokens: 100, outputTokens: 50, totalTokens: 150, cachedInputTokens: 900 }),
+    240,
+  );
+});

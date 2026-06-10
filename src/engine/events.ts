@@ -8,6 +8,10 @@ export interface UsageTotals {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  // Cache-read input tokens (a subset of input, billed at a fraction of the base
+  // rate). Providers differ on whether `inputTokens` already includes these — see
+  // `effectiveTokens`, which handles both conventions.
+  cachedInputTokens: number;
 }
 
 export type EngineEvent =
@@ -32,12 +36,37 @@ export type EngineEvent =
   // next step rendered dim beneath it. Both are already secret-redacted.
   | { type: "error"; error: string; hint?: string; retryable?: boolean };
 
-export const emptyUsage = (): UsageTotals => ({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+export const emptyUsage = (): UsageTotals => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+  cachedInputTokens: 0,
+});
 
 export function addUsage(a: UsageTotals, b: Partial<UsageTotals>): UsageTotals {
   return {
-    inputTokens: a.inputTokens + (b.inputTokens ?? 0),
-    outputTokens: a.outputTokens + (b.outputTokens ?? 0),
-    totalTokens: a.totalTokens + (b.totalTokens ?? 0),
+    inputTokens: (a.inputTokens ?? 0) + (b.inputTokens ?? 0),
+    outputTokens: (a.outputTokens ?? 0) + (b.outputTokens ?? 0),
+    totalTokens: (a.totalTokens ?? 0) + (b.totalTokens ?? 0),
+    cachedInputTokens: (a.cachedInputTokens ?? 0) + (b.cachedInputTokens ?? 0),
   };
+}
+
+// Anthropic bills a cache read at ~10% of the base input rate. Re-price the cached
+// portion at that rate to estimate what was actually billed, rather than the raw
+// `totalTokens` which counts every re-sent cached token at full weight.
+const CACHE_READ_RATE = 0.1;
+
+// Effective (billed-weighted) token estimate. Providers disagree on whether
+// `inputTokens` already includes `cachedInputTokens`: OpenRouter's `prompt_tokens`
+// includes them (cached ≤ input), Anthropic's `input_tokens` counts only fresh
+// tokens (cached reported separately, so cached may exceed input). We detect which
+// convention applies and discount the cached portion either way. With no cache
+// hits this collapses to `inputTokens + outputTokens` (== totalTokens).
+export function effectiveTokens(u: UsageTotals): number {
+  const cached = u.cachedInputTokens ?? 0;
+  const input = u.inputTokens ?? 0;
+  const inputIncludesCached = cached <= input;
+  const fullPriceInput = inputIncludesCached ? input - cached : input;
+  return Math.round(fullPriceInput + cached * CACHE_READ_RATE + (u.outputTokens ?? 0));
 }

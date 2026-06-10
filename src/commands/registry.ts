@@ -8,6 +8,7 @@ import { loadOutputStyles } from "../context/outputStyles.ts";
 import { loadAgents } from "../agents/loader.ts";
 import { loadHooks } from "../hooks/engine.ts";
 import { configuredProviders, parseModelSpec } from "../providers/resolve.ts";
+import { effectiveTokens } from "../engine/events.ts";
 import { KNOWN_PROVIDERS } from "../config/schema.ts";
 import type { UsageTotals } from "../engine/events.ts";
 import type { TodoItem } from "../tools/todoStore.ts";
@@ -219,12 +220,14 @@ const COMMANDS: CommandDef[] = [
       const budget = ctx.config.contextBudget;
       const pct = budget ? Math.round((u.totalTokens / budget) * 100) : 0;
       const compactAt = Math.round(budget * ctx.config.compactRatio);
+      const billed = effectiveTokens(u);
       return {
         type: "notice",
         text:
           `Context window:\n` +
           `  used: ${u.totalTokens} tokens (${pct}% of ${budget})\n` +
-          `  in: ${u.inputTokens}  out: ${u.outputTokens}\n` +
+          `  in: ${u.inputTokens}  out: ${u.outputTokens}  cached: ${u.cachedInputTokens}\n` +
+          `  billed (est, cache-discounted): ~${billed} tokens\n` +
           `  auto-compact at ~${compactAt} tokens (ratio ${ctx.config.compactRatio})`,
       };
     },

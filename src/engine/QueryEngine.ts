@@ -188,6 +188,7 @@ export class QueryEngine {
                 inputTokens: u.inputTokens ?? 0,
                 outputTokens: u.outputTokens ?? 0,
                 totalTokens: u.totalTokens ?? 0,
+                cachedInputTokens: u.cachedInputTokens ?? 0,
               });
               this.usage = addUsage(baseline, stepsUsage);
               yield { type: "usage", usage: this.usage };
@@ -242,6 +243,7 @@ export class QueryEngine {
       inputTokens: turnUsage.inputTokens ?? 0,
       outputTokens: turnUsage.outputTokens ?? 0,
       totalTokens: turnUsage.totalTokens ?? 0,
+      cachedInputTokens: turnUsage.cachedInputTokens ?? 0,
     };
     // Reconcile against the authoritative turn total. We already folded per-step
     // usage into this.usage live; rebase on the baseline so we don't double-count.

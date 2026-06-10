@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import { basename } from "node:path";
 import { theme } from "./theme.ts";
 import { useTerminalWidth } from "./useTerminalWidth.ts";
+import { effectiveTokens, type UsageTotals } from "../engine/events.ts";
 
 // Compact token count: 100, 1k, 1m, 1b — one decimal place above 1k, trimmed of
 // trailing ".0", so 1500 → "1.5k" and 2000 → "2k".
@@ -27,12 +28,16 @@ function formatTokens(n: number): string {
 export function StatusBar(props: {
   modelSpec: string;
   cwd: string;
-  totalTokens: number;
+  usage: UsageTotals;
   custom?: string; // settings-driven status line; overrides the default when set
 }) {
   // Stay clear of the right edge (parent paddingX={1} plus a 2-col safety gap) so
   // the line never reaches the final column and the terminal never reflows it.
   const width = Math.max(20, useTerminalWidth() - 4);
+  // Show the billed-weighted estimate, not the raw turn total: the raw number
+  // re-counts the cached prompt prefix at full price on every step of the tool
+  // loop, which wildly overstates cost. See effectiveTokens.
+  const tokens = effectiveTokens(props.usage);
   if (props.custom) {
     return (
       <Box marginTop={1} width={width}>
@@ -48,7 +53,7 @@ export function StatusBar(props: {
         <Text color={theme.accent}>⚓ privateer</Text>
         <Text color={theme.dim}> (shift+tab to cycle)</Text>
         <Text color={theme.dim}>
-          {` · ${props.modelSpec} · ${basename(props.cwd) || props.cwd} · ${formatTokens(props.totalTokens)} tk`}
+          {` · ${props.modelSpec} · ${basename(props.cwd) || props.cwd} · ${formatTokens(tokens)} tk`}
         </Text>
       </Text>
     </Box>

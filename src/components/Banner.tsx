@@ -16,11 +16,9 @@ function shortenPath(cwd: string): string {
 // Anchor motif rendered in ASCII — the Privateer mark (ring, stock, shank, flukes).
 const ANCHOR = [
   "    .-.    ",
-  "   |___|   ",
-  "   | + |   ",
-  "   '-+-'   ",
-  "  ---|---  ",
-  " _   |   _ ",
+  "    '_'   ",
+  "   --|--  ",
+  "     |    ",
   "  \\  |  /  ",
   "   \\_|_/   ",
 ];

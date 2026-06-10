@@ -882,7 +882,7 @@ export function App({
         <StatusBar
           modelSpec={modelSpec}
           cwd={cwd}
-          totalTokens={usage.totalTokens}
+          usage={usage}
           custom={statusText || undefined}
         />
 

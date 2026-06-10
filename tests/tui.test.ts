@@ -10,6 +10,7 @@ import { TodoPanel } from "../src/components/TodoPanel.tsx";
 import { EntryView } from "../src/components/Transcript.tsx";
 import { ToolCallView } from "../src/components/ToolCallView.tsx";
 import { StatusBar } from "../src/components/StatusBar.tsx";
+import { emptyUsage } from "../src/engine/events.ts";
 import { Config } from "../src/config/schema.ts";
 
 // Smoke test: the App renders its full component tree (banner, status bar, input)
@@ -89,7 +90,7 @@ test("ToolCallView truncates output unless verbose", () => {
 
 test("StatusBar renders a custom status line when provided", () => {
   const def = render(
-    React.createElement(StatusBar, { modelSpec: "m", cwd: "/x", totalTokens: 0 }),
+    React.createElement(StatusBar, { modelSpec: "m", cwd: "/x", usage: emptyUsage() }),
   );
   assert.match(def.lastFrame() ?? "", /privateer/);
   def.unmount();
@@ -98,7 +99,7 @@ test("StatusBar renders a custom status line when provided", () => {
     React.createElement(StatusBar, {
       modelSpec: "m",
       cwd: "/x",
-      totalTokens: 0,
+      usage: emptyUsage(),
       custom: "MY-STATUS-LINE",
     }),
   );
