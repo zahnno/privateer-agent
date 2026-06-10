@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Box, Text, Static, useApp, useInput, useStdout } from "ink";
 import Spinner from "ink-spinner";
 import { Banner } from "./Banner.tsx";
-import { StatusBar } from "./StatusBar.tsx";
+import { StatusBar, formatTokens } from "./StatusBar.tsx";
 import { EntryView } from "./Transcript.tsx";
 import { ApprovalPrompt } from "./ApprovalPrompt.tsx";
 import { ModelPicker } from "./ModelPicker.tsx";
@@ -93,6 +93,13 @@ export function App({
   const [modelSpec, setModelSpec] = useState(model);
   const [mode, setMode] = useState<PermissionMode>(config.permissionMode);
   const [usage, setUsage] = useState<UsageTotals>(resume?.usage ?? emptyUsage());
+  // Context-window occupancy (Claude-Code-style "% of context") and per-turn cost,
+  // shown alongside the cumulative session usage so a one-word message visibly costs
+  // little. `turnUsage` ticks live during a turn; `lastTurnUsage` holds the last
+  // finished turn's total.
+  const [context, setContext] = useState<{ used: number; budget: number }>({ used: 0, budget: 0 });
+  const [turnUsage, setTurnUsage] = useState<UsageTotals>(emptyUsage());
+  const [lastTurnUsage, setLastTurnUsage] = useState<UsageTotals>(emptyUsage());
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingApproval | null>(null);
   const [picking, setPicking] = useState(false);
@@ -560,6 +567,7 @@ export function App({
 
     setVerb(randomVerb());
     setBusy(true);
+    setTurnUsage(emptyUsage());
     const controller = new AbortController();
     abortRef.current = controller;
     let liveEntries: Entry[] = [];
@@ -649,9 +657,14 @@ export function App({
           case "usage":
             // Live running total — ticks the token count up between steps.
             setUsage(ev.usage);
+            setTurnUsage(ev.turn);
+            setContext(engine.contextUsage());
             break;
           case "finish":
             setUsage(engine.usage);
+            // ev.usage is this turn's authoritative total (see QueryEngine finish).
+            setLastTurnUsage(ev.usage);
+            setContext(engine.contextUsage());
             break;
           case "aborted":
             pushLive({ kind: "notice", text: "Interrupted." });
@@ -872,7 +885,7 @@ export function App({
               {verb}…
             </Text>
             <Text color={theme.dim} wrap="truncate-end">
-              (esc to interrupt · {elapsed}s · {usage.totalTokens} tokens)
+              (esc to interrupt · {elapsed}s · {formatTokens(turnUsage.totalTokens)} tokens this turn)
             </Text>
           </Box>
         )}
@@ -883,6 +896,8 @@ export function App({
           modelSpec={modelSpec}
           cwd={cwd}
           usage={usage}
+          context={context}
+          lastTurn={lastTurnUsage}
           custom={statusText || undefined}
         />
 

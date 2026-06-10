@@ -21,7 +21,9 @@ export type EngineEvent =
   | { type: "tool-result"; id: string; name: string; output: unknown }
   | { type: "tool-error"; id: string; name: string; error: string }
   | { type: "step-finish" }
-  | { type: "usage"; usage: UsageTotals } // running total, emitted live as steps finish
+  // `usage` is the cumulative session total; `turn` is just this turn's accumulation
+  // so far. Both emitted live as steps finish so the UI can show either.
+  | { type: "usage"; usage: UsageTotals; turn: UsageTotals }
   | { type: "aborted" }
   | { type: "compacted"; before: number; after: number }
   // The router switched this turn to a non-default model. `missing` lists modalities

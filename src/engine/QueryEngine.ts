@@ -65,6 +65,13 @@ export class QueryEngine {
 
   constructor(private readonly opts: QueryEngineOptions) {}
 
+  // Current context-window occupancy: estimated tokens in history over the budget
+  // that triggers compaction. Drives the Claude-Code-style "% of context" readout.
+  // `budget` is 0 when auto-compaction is disabled.
+  contextUsage(): { used: number; budget: number } {
+    return { used: estimateTokens(this.messages), budget: this.opts.contextBudget ?? 0 };
+  }
+
   async *send(
     userText: string,
     signal?: AbortSignal,
@@ -191,7 +198,7 @@ export class QueryEngine {
                 cachedInputTokens: u.cachedInputTokens ?? 0,
               });
               this.usage = addUsage(baseline, stepsUsage);
-              yield { type: "usage", usage: this.usage };
+              yield { type: "usage", usage: this.usage, turn: stepsUsage };
             }
             yield { type: "step-finish" };
             break;

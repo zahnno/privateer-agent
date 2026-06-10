@@ -7,7 +7,7 @@ import { effectiveTokens, type UsageTotals } from "../engine/events.ts";
 
 // Compact token count: 100, 1k, 1m, 1b — one decimal place above 1k, trimmed of
 // trailing ".0", so 1500 → "1.5k" and 2000 → "2k".
-function formatTokens(n: number): string {
+export function formatTokens(n: number): string {
   const units: [number, string][] = [
     [1e9, "b"],
     [1e6, "m"],
@@ -19,25 +19,37 @@ function formatTokens(n: number): string {
   return `${n}`;
 }
 
-// The footer line rendered directly under the prompt box:
-// model · cwd · tokens on the left, a shortcuts hint on the right. The active
-// permission mode is shown separately by <ModeHint> below the prompt.
+// The footer line rendered directly under the prompt box. The headline is a
+// Claude-Code-style context-window gauge ("how full is the window right now"),
+// not the cumulative billed total — a one-word message barely moves it. We pack
+// the diagnostics (context %, cache hits, last-turn cost) into a leading bracket
+// so they survive right-edge truncation; model · cwd · session follow and clip
+// first. The active permission mode is shown separately by <ModeHint>.
 //
 // Both sides truncate (never wrap) and the row is bounded a few columns short of
 // the terminal so it always stays a single physical line — see useTerminalWidth.
+
+// "84k/120k · 70%" when a budget is set, else a bare "84k ctx".
+function formatContext(ctx?: { used: number; budget: number }): string {
+  if (!ctx) return "";
+  if (ctx.budget > 0) {
+    const pct = Math.round((ctx.used / ctx.budget) * 100);
+    return `${formatTokens(ctx.used)}/${formatTokens(ctx.budget)} · ${pct}%`;
+  }
+  return `${formatTokens(ctx.used)} ctx`;
+}
+
 export function StatusBar(props: {
   modelSpec: string;
   cwd: string;
   usage: UsageTotals;
+  context?: { used: number; budget: number };
+  lastTurn?: UsageTotals;
   custom?: string; // settings-driven status line; overrides the default when set
 }) {
   // Stay clear of the right edge (parent paddingX={1} plus a 2-col safety gap) so
   // the line never reaches the final column and the terminal never reflows it.
   const width = Math.max(20, useTerminalWidth() - 4);
-  // Show the billed-weighted estimate, not the raw turn total: the raw number
-  // re-counts the cached prompt prefix at full price on every step of the tool
-  // loop, which wildly overstates cost. See effectiveTokens.
-  const tokens = effectiveTokens(props.usage);
   if (props.custom) {
     return (
       <Box marginTop={1} width={width}>
@@ -47,13 +59,20 @@ export function StatusBar(props: {
       </Box>
     );
   }
+  // Diagnostics, billed-weighted so cache hits show their real (discounted) cost
+  // rather than the raw re-sent total. See effectiveTokens.
+  const cached = formatTokens(props.usage.cachedInputTokens ?? 0);
+  const lastTurn = props.lastTurn ? formatTokens(effectiveTokens(props.lastTurn)) : "0";
+  const session = formatTokens(effectiveTokens(props.usage));
+  const diag = `${formatContext(props.context)} · cached ${cached} · +${lastTurn} last`;
   return (
     <Box marginTop={1} width={width}>
       <Text wrap="truncate-end">
         <Text color={theme.accent}>⚓ privateer</Text>
+        <Text color={theme.dim}>{` [${diag}]`}</Text>
         <Text color={theme.dim}> (shift+tab to cycle)</Text>
         <Text color={theme.dim}>
-          {` · ${props.modelSpec} · ${basename(props.cwd) || props.cwd} · ${formatTokens(tokens)} tk`}
+          {` · ${props.modelSpec} · ${basename(props.cwd) || props.cwd} · ${session} session`}
         </Text>
       </Text>
     </Box>
