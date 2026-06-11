@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CheckpointStore } from "../src/memory/checkpoints.ts";
@@ -74,6 +74,41 @@ test("persisted checkpoints survive a reload (restart-and-resume)", () => {
     reloaded.restoreFiles(reloaded.get(cp.id)!);
     assert.equal(readFileSync(f, "utf8"), "v0"); // f restored from a persisted blob
     assert.equal(existsSync(g), false); // g (created after the checkpoint) removed
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+    rmSync(ckpt, { recursive: true, force: true });
+  }
+});
+
+test("retention cap drops old checkpoints and garbage-collects orphaned blobs", () => {
+  const work = mkdtempSync(join(tmpdir(), "priv-ckpt-gc-work-"));
+  const ckpt = mkdtempSync(join(tmpdir(), "priv-ckpt-gc-store-"));
+  const blobs = join(ckpt, "blobs");
+  try {
+    const f = join(work, "f.txt");
+    writeFileSync(f, "v0", "utf8");
+
+    // Cap of 2: each turn edits f to a unique value, then checkpoints.
+    const store = new CheckpointStore(ckpt, 2);
+    for (let i = 1; i <= 5; i++) {
+      mutate(store, f, `v${i}`);
+      store.create({ messagesLength: i, committedLength: i, label: `turn ${i}` });
+    }
+
+    // Only the last 2 checkpoints survive.
+    assert.equal(store.list().length, 2);
+
+    // Live blobs: the baseline v0 (original) plus the contents the surviving two
+    // checkpoints reference — far fewer than the 6 unique versions ever written.
+    const remaining = readdirSync(blobs);
+    assert.ok(remaining.length <= 4, `expected GC to bound blobs, saw ${remaining.length}`);
+
+    // The older of the two survivors is turn 4 (which captured f as "v4"); it still
+    // restores correctly from a retained blob.
+    const oldest = store.list()[0];
+    assert.equal(oldest.label, "turn 4");
+    store.restoreFiles(oldest);
+    assert.equal(readFileSync(f, "utf8"), "v4");
   } finally {
     rmSync(work, { recursive: true, force: true });
     rmSync(ckpt, { recursive: true, force: true });

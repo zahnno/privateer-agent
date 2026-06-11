@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+
+// How many of the most recent checkpoints to keep. Older ones are dropped and any blobs
+// they alone referenced are garbage-collected, so a long-lived session stays bounded.
+const DEFAULT_MAX_CHECKPOINTS = 100;
 
 // The on-disk state of a single file at a moment in time. `existed: false` means the
 // file was absent (so restoring deletes it). When it existed, `hash` keys its content
@@ -62,6 +66,18 @@ class BlobStore {
     }
     return this.mem.get(hash);
   }
+
+  // Drop every stored blob whose hash isn't in `live`.
+  keep(live: Set<string>): void {
+    if (this.dir) {
+      if (!existsSync(this.dir)) return;
+      for (const name of readdirSync(this.dir)) {
+        if (!live.has(name)) rmSync(join(this.dir, name), { force: true });
+      }
+    } else {
+      for (const h of this.mem.keys()) if (!live.has(h)) this.mem.delete(h);
+    }
+  }
 }
 
 // Undo for the agent's edits, durable when bound to a session directory. A checkpoint
@@ -78,7 +94,10 @@ export class CheckpointStore {
   private seq = 0;
   private blobs: BlobStore;
 
-  constructor(private dir?: string) {
+  constructor(
+    private dir?: string,
+    private maxCheckpoints = DEFAULT_MAX_CHECKPOINTS,
+  ) {
     this.blobs = new BlobStore(dir ? join(dir, "blobs") : undefined);
   }
 
@@ -171,8 +190,23 @@ export class CheckpointStore {
       files,
     };
     this.checkpoints.push(cp);
+    this.trim();
     this.persist();
     return cp;
+  }
+
+  // Enforce the retention cap, dropping the oldest checkpoints and reclaiming any blobs
+  // they alone referenced. Files first touched before the surviving window stay
+  // rewindable: the oldest retained checkpoint falls back to the `original` baseline,
+  // whose blobs are never collected while the file remains in `touched`.
+  private trim(): void {
+    if (this.checkpoints.length <= this.maxCheckpoints) return;
+    this.checkpoints.splice(0, this.checkpoints.length - this.maxCheckpoints);
+    const live = new Set<string>();
+    for (const s of this.original.values()) if (s.hash) live.add(s.hash);
+    for (const cp of this.checkpoints)
+      for (const s of Object.values(cp.files)) if (s.hash) live.add(s.hash);
+    this.blobs.keep(live);
   }
 
   list(): Checkpoint[] {
