@@ -386,7 +386,7 @@ export function App({
   const append = (...entries: Entry[]) => setCommitted((c) => [...c, ...entries]);
 
   function handleCommand(raw: string): boolean {
-    const res = runCommand(raw, { config, modelSpec, mode, usage, cwd, todos, customCommands });
+    const res = runCommand(raw, { config, modelSpec, mode, usage, context, cwd, todos, customCommands });
     if (!res) return false;
     append({ kind: "user", text: raw });
     switch (res.type) {

@@ -50,6 +50,9 @@ export interface CommandContext {
   modelSpec: string;
   mode: PermissionMode;
   usage: UsageTotals;
+  // Current context-window occupancy (estimated tokens in live history vs budget).
+  // Distinct from `usage`, which is cumulative billed tokens across the whole session.
+  context?: { used: number; budget: number };
   cwd: string;
   todos: TodoItem[];
   customCommands?: CustomCommand[];
@@ -218,17 +221,22 @@ const COMMANDS: CommandDef[] = [
     run: (_args, ctx) => {
       const u = ctx.usage;
       const budget = ctx.config.contextBudget;
-      const pct = budget ? Math.round((u.totalTokens / budget) * 100) : 0;
+      // Window occupancy is the size of the live history, NOT cumulative billed
+      // tokens — the agentic loop re-sends the prompt each step, so `usage.totalTokens`
+      // is many times the window and would report a meaningless % here.
+      const used = ctx.context?.used ?? 0;
+      const pct = budget ? Math.round((used / budget) * 100) : 0;
       const compactAt = Math.round(budget * ctx.config.compactRatio);
       const billed = effectiveTokens(u);
       return {
         type: "notice",
         text:
           `Context window:\n` +
-          `  used: ${u.totalTokens} tokens (${pct}% of ${budget})\n` +
+          `  used: ${used} tokens (${pct}% of ${budget})\n` +
+          `  auto-compact at ~${compactAt} tokens (ratio ${ctx.config.compactRatio})\n` +
+          `Session billed (cumulative, all turns):\n` +
           `  in: ${u.inputTokens}  out: ${u.outputTokens}  cached: ${u.cachedInputTokens}\n` +
-          `  billed (est, cache-discounted): ~${billed} tokens\n` +
-          `  auto-compact at ~${compactAt} tokens (ratio ${ctx.config.compactRatio})`,
+          `  total: ${u.totalTokens}  billed (est, cache-discounted): ~${billed} tokens`,
       };
     },
   },
